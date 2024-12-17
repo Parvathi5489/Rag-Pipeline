@@ -1,91 +1,111 @@
-
-Install Necessary Libraries:
-pip install beautifulsoup4 requests sentence-transformers faiss-cpu openai
-Scrape Data from a Website:
+# Import necessary libraries
 import requests
 from bs4 import BeautifulSoup
+import openai
+import faiss
+import numpy as np
+from sentence_transformers import SentenceTransformer
 
+# Setup OpenAI API Key
+openai.api_key = 'your_openai_api_key_here'
+
+# Step 1: Web Scraping and Content Extraction
 def scrape_website(url):
+    """Crawl and scrape content from a given URL."""
     response = requests.get(url)
     soup = BeautifulSoup(response.content, 'html.parser')
+
+    # Extract text content (you can customize this to target specific tags)
+    paragraphs = soup.find_all('p')
+    text_content = ' '.join([p.get_text() for p in paragraphs])
     
-    # Extract all paragraphs from the website
-    paragraphs = [p.get_text() for p in soup.find_all('p')]
-    
-    # Optional: Extract headings (e.g., h1, h2, h3)
-    headings = [h.get_text() for h in soup.find_all(['h1', 'h2', 'h3'])]
-    
-    # Combine paragraphs and headings to form chunks
-    content = paragraphs + headings
-    return content
+    return text_content
 
-url = "https://example.com"  # Replace with the website you want to scrape
-website_data = scrape_website(url)
+# Step 2: Data Ingestion - Create Embeddings and Store in Vector Database
+def create_embeddings(text_data):
+    """Convert text data into embeddings using a pre-trained model."""
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    embeddings = model.encode(text_data)
+    return embeddings
 
-Embed the Scraped Data:
-from sentence_transformers import SentenceTransformer
-import numpy as np
+# Step 3: Store Embeddings in Vector Database (FAISS)
+class VectorDatabase:
+    def __init__(self, dimension=768):
+        """Initialize the vector database using FAISS."""
+        self.dimension = dimension
+        self.index = faiss.IndexFlatL2(dimension)
+        self.metadata = []
 
-# Initialize the embedding model
-model = SentenceTransformer('all-MiniLM-L6-v2')
+    def add(self, embeddings, metadata):
+        """Add embeddings and metadata to the database."""
+        self.index.add(np.array(embeddings))
+        self.metadata.extend(metadata)
 
-def embed_data(data):
-    # Embed the chunks (text data from the website)
-    embeddings = model.encode(data)
-    return np.array(embeddings)
+    def search(self, query_embedding, top_k=3):
+        """Search the vector database for the most similar embeddings."""
+        distances, indices = self.index.search(np.array([query_embedding]), top_k)
+        return distances, indices
 
-embeddings = embed_data(website_data)
+# Initialize the vector database
+vector_db = VectorDatabase()
 
- Store Embeddings in FAISS:
-import faiss
+# Step 4: Process the Website Content and Add to Vector Database
+def process_and_store_website(url):
+    """Process website and store embeddings."""
+    content = scrape_website(url)
+    chunks = content.split('.')  # Simple segmentation based on sentence endings
+    embeddings = create_embeddings(chunks)
+    vector_db.add(embeddings, chunks)
 
-def create_faiss_index(embeddings):
-    # Create a FAISS index for similarity search
-    index = faiss.IndexFlatL2(embeddings.shape[1])  # L2 distance for similarity search
-    index.add(embeddings)  # Add embeddings to the index
-    return index
+# Example usage for crawling and processing a website
+# process_and_store_website('https://example.com')
 
-index = create_faiss_index(embeddings)
+# Step 5: Handle User Query by Creating Embedding and Searching Database
+def query_handler(user_query):
+    """Process the user query and retrieve relevant information."""
+    query_embedding = create_embeddings([user_query])[0]
+    distances, indices = vector_db.search(query_embedding)
 
-Query Handling (Search and Retrieve Similar Chunks):
-def search_query(query, model, index, data):
-    # Convert the query into an embedding
-    query_embedding = model.encode([query])
-    
-    # Perform the search for the top N most similar chunks
-    D, I = index.search(query_embedding, k=5)  # Search for 5 closest matches
-    
-    # Retrieve the relevant chunks based on the indices
-    relevant_chunks = [data[i] for i in I[0]]
+    # Retrieve the most relevant chunks based on the search results
+    relevant_chunks = [vector_db.metadata[idx] for idx in indices[0]]
+
     return relevant_chunks
 
-# Example query
-user_query = "What is the purpose of web scraping?"
-retrieved_chunks = search_query(user_query, model, index, website_data)
+# Step 6: Response Generation Using LLM (OpenAI API)
+def generate_response(user_query, relevant_chunks):
+    """Generate a response using OpenAI's GPT model."""
+    # Combine the retrieved chunks with the user query to generate a detailed response
+    context = " ".join(relevant_chunks)
+    prompt = f"User's question: {user_query}\nContext: {context}\nAnswer:"
 
-# Print the retrieved chunks
-for chunk in retrieved_chunks:
-    print(chunk)
-
-
-import openai
-
-openai.api_key = "your-openai-api-key"  # Add your OpenAI API key
-
-def generate_response(query, relevant_chunks):
-    context = "\n".join(relevant_chunks)  # Combine relevant chunks for context
-    
-
-    prompt = f"Answer the following question using the provided context:\n\nContext: {context}\n\nQuestion: {query}\nAnswer:"
-    
     response = openai.Completion.create(
-        engine="text-davinci-003",  # Use the GPT-3 engine
+        model="text-davinci-003",  # You can change to a different model
         prompt=prompt,
-        max_tokens=150
+        max_tokens=150,
+        n=1,
+        stop=None,
+        temperature=0.7,
     )
-    
+
     return response.choices[0].text.strip()
 
-# Generate a response for the user query
-response = generate_response(user_query, retrieved_chunks)
+# Step 7: Example User Query Flow
+def answer_user_query(url, user_query):
+    """Full flow to scrape website, store embeddings, and generate response to a query."""
+    # Process and store website content in the vector database
+    process_and_store_website(url)
+
+    # Handle the user query and retrieve relevant chunks
+    relevant_chunks = query_handler(user_query)
+
+    # Generate a response using the relevant chunks
+    response = generate_response(user_query, relevant_chunks)
+    return response
+
+# Example query handling
+url = 'https://example.com'
+user_query = 'What is the main idea of the website?'
+
+# Call the answer_user_query function
+response = answer_user_query(url, user_query)
 print(response)
