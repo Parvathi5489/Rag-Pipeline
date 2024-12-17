@@ -1,0 +1,68 @@
+# Ignore Python Bytecode Files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore virtual environment directories
+venv/
+env/
+ENV/
+.venv/
+.virtualenv/
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore IDE-specific files
+.vscode/
+.idea/
+
+# Ignore .env files for storing environment variables (e.g., API keys)
+.env
+
+# Ignore OpenAI API key file (if you store it locally for testing)
+openai_key.txt
+
+# Ignore model-related files (you might not want to commit large model weights)
+models/
+*.h5
+*.pth
+*.bin
+
+# Ignore temporary and log files
+*.log
+*.bak
+*.tmp
+
+# Ignore FAISS index files (if using FAISS for indexing)
+faiss_index/
+faiss.*
+
+# Ignore large data files and scraped content
+scraped_data/
+data/
+
+# Ignore file outputs like PDFs, CSVs, or other non-source code files
+*.pdf
+*.csv
+*.xlsx
+*.tsv
+
+# Ignore API and authentication keys stored locally
+*.key
+*.pem
+*.pub
+
+# Ignore any temporary or OS-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore additional generated files (e.g., if you're using a cloud-based storage system or log files)
+*.tar.gz
+*.zip
+*.7z
+*.gz
+
+# Ignore notebooks and outputs not directly related to the repository
+output/
